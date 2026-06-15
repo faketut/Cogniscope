@@ -31,20 +31,28 @@ pnpm seed
 
 After `pnpm seed`, the current rehearsed sessions are:
 
-- `seed-Oj2Q1Zvp` — Quadratic factoring
-- `seed-JQnlgkUY` — Chain rule derivative
-- `seed-2hzj1khv` — Two Sum
-- `seed-ofjiFV3x` — Integration by parts
+- `seed-7MkRNIuV` — Quadratic factoring
+- `seed-EBlyU3ga` — Chain rule derivative
+- `seed-cISVIj18` — Two Sum
+- `seed-YXiQlW2g` — Integration by parts
 
 Suggested live click path:
 
 1. Open `/history` and point out the four seeded sessions.
-2. Open `/report/seed-Oj2Q1Zvp` to show the reading, by-step timeline, replay, tutor, recommendations, and share-trace actions.
-3. Open `/inspect/seed-Oj2Q1Zvp` to show the raw stored `sessions`, `events`, `reports`, and rrweb file metadata.
-4. Open `/report/seed-2hzj1khv` to show the programming flow and discuss that `Run local tests` executes in-browser, while `Submit & analyze` stores the code and behavior trace for analysis.
-5. Hit `/api/sessions/seed-Oj2Q1Zvp/trace.png` if you want a fast proof that export works end-to-end.
+2. Open `/report/seed-7MkRNIuV` to show the reading, by-step timeline, replay, tutor, recommendations, and share-trace actions.
+3. Open `/inspect/seed-7MkRNIuV` to show the raw stored `sessions`, `events`, `reports`, and rrweb file metadata.
+4. Open `/report/seed-cISVIj18` to show the programming flow and discuss that `Run local tests` executes in-browser, while `Submit & analyze` stores the code and behavior trace for analysis.
+5. Hit `/api/sessions/seed-7MkRNIuV/trace.png` if you want a fast proof that export works end-to-end.
 
 If you re-run `pnpm seed`, these ids will change; use `/history` as the source of truth.
+
+### Live flow (no seed, ~2 min)
+
+1. From `/`, open any problem (e.g. `/practice/quadratic-factoring`).
+2. Work the steps. A per-question timer is shown; the cap is `max(estMinutes × 2, 3)` minutes and turns amber in the final 60s.
+3. Either submit, or let the timer expire — on time-up the session auto-submits with `auto: true` in telemetry and a `time_expired` event is recorded.
+4. You'll land on `/analysis/[sessionId]` then `/report/[sessionId]`. Walk through Reading → By step → Replay → Tutor.
+5. Optional: hit `/api/sessions/<id>/trace.png` for the shareable PNG.
 
 ## Configuration
 
