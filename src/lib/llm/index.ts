@@ -33,9 +33,16 @@ export function getLLM(): LLMProvider {
       _provider = new MockProvider();
       return _provider;
     }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { QwenProvider } = require("./qwen") as typeof import("./qwen");
-    _provider = new QwenProvider(apiKey);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { QwenProvider } = require("./qwen") as typeof import("./qwen");
+      _provider = new QwenProvider(apiKey);
+    } catch (err) {
+      console.warn(
+        `[llm] Qwen provider failed to initialise (${(err as Error).message}) — falling back to mock.`
+      );
+      _provider = new MockProvider();
+    }
     return _provider;
   }
 

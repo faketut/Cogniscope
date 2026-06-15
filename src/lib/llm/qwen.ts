@@ -6,7 +6,15 @@ import type {
 
 /**
  * Qwen provider using Alibaba DashScope's OpenAI-compatible endpoint.
- *   https://dashscope.aliyuncs.com/compatible-mode/v1
+ *
+ * Default endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1
+ *
+ * For workspace-/region-scoped Model Studio (Bailian) deployments you can
+ * point `QWEN_BASE_URL` at a templated host such as
+ *   https://${WORKSPACE_ID}.<region>.aliyuncs.com/compatible-mode/v1
+ * Next.js's `@next/env` runs `dotenv-expand`, so `${WORKSPACE_ID}` gets
+ * substituted from the same `.env.local` file. The constructor still
+ * validates that no placeholders made it through.
  *
  * Implements the same surface as the Gemini provider so callers can switch
  * between them by changing `LLM_PROVIDER` alone. JSON-mode is requested via
@@ -14,10 +22,8 @@ import type {
  * `completeJSON` helper also strips fences / extracts the first JSON object
  * as a safety net.
  */
-const ENDPOINT =
-  process.env.QWEN_BASE_URL ||
-  "https://dashscope.aliyuncs.com/compatible-mode/v1";
-const MODEL = process.env.QWEN_MODEL || "qwen-plus";
+const DEFAULT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+const DEFAULT_MODEL = "qwen-plus";
 
 interface ChatCompletionMessage {
   role: "system" | "user" | "assistant";
@@ -28,13 +34,39 @@ interface ChatCompletionResponse {
   choices?: { delta?: { content?: string }; message?: { content?: string } }[];
 }
 
+function resolveEndpoint(raw: string | undefined): string {
+  const url = (raw ?? "").trim() || DEFAULT_ENDPOINT;
+  // Catch templates the user forgot to fill in.
+  if (url.includes("<region>") || url.includes("<workspace")) {
+    throw new Error(
+      `QWEN_BASE_URL still contains a placeholder (${url}). Replace <region> (and any <workspace…>) with real values.`
+    );
+  }
+  if (/\$\{[^}]+\}/.test(url) || /(?<![A-Za-z0-9_])\$[A-Z_][A-Z0-9_]*/.test(url)) {
+    throw new Error(
+      `QWEN_BASE_URL has an unexpanded variable reference (${url}). Make sure the referenced var (e.g. WORKSPACE_ID) is defined in the same .env file.`
+    );
+  }
+  try {
+    // Throws on malformed URL.
+    new URL(url);
+  } catch {
+    throw new Error(`QWEN_BASE_URL is not a valid URL: ${url}`);
+  }
+  return url.replace(/\/+$/, "");
+}
+
 export class QwenProvider implements LLMProvider {
   name = "qwen";
   private apiKey: string;
+  private endpoint: string;
+  private model: string;
 
   constructor(apiKey: string) {
     if (!apiKey) throw new Error("Qwen provider requires QWEN_API_KEY");
     this.apiKey = apiKey;
+    this.endpoint = resolveEndpoint(process.env.QWEN_BASE_URL);
+    this.model = (process.env.QWEN_MODEL || "").trim() || DEFAULT_MODEL;
   }
 
   private async chat(
@@ -43,7 +75,7 @@ export class QwenProvider implements LLMProvider {
     stream = false
   ): Promise<Response> {
     const body: Record<string, unknown> = {
-      model: MODEL,
+      model: this.model,
       messages,
       temperature: opts?.temperature ?? 0.4,
       max_tokens: opts?.maxTokens ?? 2048,
@@ -52,7 +84,7 @@ export class QwenProvider implements LLMProvider {
     if (opts?.responseSchema) {
       body.response_format = { type: "json_object" };
     }
-    const res = await fetch(`${ENDPOINT}/chat/completions`, {
+    const res = await fetch(`${this.endpoint}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",

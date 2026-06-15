@@ -55,7 +55,8 @@ If you re-run `pnpm seed`, these ids will change; use `/history` as the source o
 | `GEMINI_MODEL` | e.g. `gemini-2.5-flash` | `gemini-2.5-flash` | Override at will |
 | `QWEN_API_KEY` | — | — | Required when provider = qwen (DashScope key) |
 | `QWEN_MODEL` | e.g. `qwen-plus` | `qwen-plus` | DashScope model id |
-| `QWEN_BASE_URL` | — | DashScope compat URL | Override for a custom OpenAI-compat host |
+| `WORKSPACE_ID` | — | — | Only needed when `QWEN_BASE_URL` references it |
+| `QWEN_BASE_URL` | — | DashScope compat URL | Override for a custom OpenAI-compat host. Supports `${WORKSPACE_ID}` expansion (via Next's `dotenv-expand`); replace any `<region>` placeholder before running. |
 
 Without an API key the app falls back to deterministic mock analysis — useful
 for offline development.
