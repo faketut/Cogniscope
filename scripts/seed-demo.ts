@@ -12,8 +12,8 @@
  */
 
 import { nanoid } from "nanoid";
-import { getDb, deleteSession } from "../src/lib/db";
-import { analyzeSession } from "../src/lib/analyzer";
+import { getDb, deleteSession } from "@/lib/db";
+import { analyzeSession } from "@/lib/analyzer";
 
 // Tag rows so re-seeding cleans up its own mess and never touches user data.
 const SEED_PREFIX = "seed-";
