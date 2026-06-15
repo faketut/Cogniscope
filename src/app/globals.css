@@ -1,27 +1,258 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import "katex/dist/katex.min.css";
+
+/* =========================================================================
+   Cogniscope design tokens
+   - Subject: a learning lab that reads HOW you think.
+   - Palette: cool vellum + ink, single highlighter-yellow accent.
+   - Type: IBM Plex Sans (body), IBM Plex Mono (telemetry), Fraunces (display).
+   ========================================================================= */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --vellum: #ededE6;
+  --surface: #f6f5ef;       /* a half-step lighter than vellum */
+  --surface-2: #e4e3db;     /* recessed surface */
+  --rule: #d6d4c9;
+
+  --ink: #13141a;
+  --graphite: #5a5d67;
+  --chalk: #9095a0;
+
+  /* Single accent — highlighter yellow */
+  --marker: #f4d03f;
+  --marker-soft: #fbeeaa;
+  --marker-ink: #2a2305;    /* readable text on marker fill */
+
+  /* Behavior signal tones (used inside trace + report only, never branding) */
+  --success: #2f6f4f;
+  --warn: #b07a17;
+  --danger: #a83b2a;
+
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --vellum: #0f1014;
+  --surface: #16171c;
+  --surface-2: #1d1e24;
+  --rule: #262830;
+
+  --ink: #ededE6;
+  --graphite: #b3b6bf;
+  --chalk: #6b6e78;
+
+  --marker: #f4d03f;
+  --marker-soft: #3a2f08;
+  --marker-ink: #f4d03f;
+
+  --success: #6fbf95;
+  --warn: #e0b357;
+  --danger: #e07866;
+
+  color-scheme: dark;
 }
 
+* {
+  border-color: var(--rule);
+}
+
+html,
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--vellum);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+/* Tabular numerals everywhere — this is a measurement product */
+.font-mono,
+code,
+kbd,
+samp {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "ss02";
+}
+
+*:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--marker);
+  color: var(--marker-ink);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  border: 2px solid var(--vellum);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--chalk);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
+
+/* =========================================================================
+   Display type — Fraunces, used sparingly
+   ========================================================================= */
+.font-display {
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "opsz" 144, "SOFT" 30;
+  font-weight: 350;
+  letter-spacing: -0.02em;
+}
+
+.font-display-tight {
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "opsz" 96, "SOFT" 20;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+/* =========================================================================
+   Eyebrow — small uppercase Plex Mono label that names a section
+   ========================================================================= */
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--chalk);
+}
+
+/* =========================================================================
+   Marker — the only place the brand accent appears as text decoration
+   ========================================================================= */
+.marker-underline {
+  background-image: linear-gradient(transparent 62%, var(--marker) 62%, var(--marker) 88%, transparent 88%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  padding: 0 0.05em;
+}
+
+/* =========================================================================
+   Hairline — a 1px divider on the rule color, used in lieu of card chrome
+   ========================================================================= */
+.hairline {
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+.hairline-dashed {
+  border: 0;
+  border-top: 1px dashed var(--rule);
+}
+
+/* =========================================================================
+   Markdown surfaces
+   ========================================================================= */
+.prose-statement p {
+  margin: 0.5rem 0;
+  color: var(--ink);
+}
+.prose-statement .katex-display {
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+.prose-statement code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+}
+
+/* Diagnosis prose — set in Fraunces like a private letter, generous leading */
+.prose-feedback {
+  color: var(--ink);
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: "opsz" 14;
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  letter-spacing: -0.005em;
+}
+.prose-feedback h1,
+.prose-feedback h2,
+.prose-feedback h3 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+}
+.prose-feedback h2 {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--chalk);
+  margin: 2.25rem 0 0.75rem;
+}
+.prose-feedback h2:first-child {
+  margin-top: 0;
+}
+.prose-feedback h3 {
+  font-family: var(--font-serif), ui-serif, Georgia, serif;
+  font-size: 1.125rem;
+  font-weight: 500;
+  margin: 1.25rem 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+.prose-feedback p {
+  margin: 0.75rem 0;
+  color: var(--ink);
+}
+.prose-feedback ul,
+.prose-feedback ol {
+  margin: 0.75rem 0 0.75rem 1.25rem;
+}
+.prose-feedback li {
+  margin: 0.4rem 0;
+  color: var(--ink);
+}
+.prose-feedback strong {
+  color: var(--ink);
+  font-weight: 600;
+  background-image: linear-gradient(transparent 62%, var(--marker) 62%, var(--marker) 88%, transparent 88%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  padding: 0 0.06em;
+}
+.prose-feedback code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--surface-2);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+}
+.prose-feedback em {
+  color: var(--graphite);
+  font-style: italic;
+}
+.prose-feedback blockquote {
+  border-left: 2px solid var(--ink);
+  margin: 1rem 0;
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--graphite);
+  font-style: italic;
+}
+
