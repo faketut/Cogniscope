@@ -47,18 +47,34 @@ pnpm seed
 ### Troubleshooting
 
 **`Error: Could not locate the bindings file` from `better-sqlite3`.**
-You're on a Node version with no published prebuild (typically Node 25+).
-Pick one:
 
-```bash
-# Recommended — switch to a supported Node, then reinstall:
-nvm install 22 && nvm use 22
-rm -rf node_modules && pnpm install
+Two known causes:
 
-# Or rebuild from source (needs Python + a C/C++ toolchain;
-# on Windows: Visual Studio Build Tools "Desktop development with C++"):
-pnpm rebuild better-sqlite3
-```
+1. **pnpm v10 skipped the install script** (most common). pnpm v10 blocks
+   postinstall scripts by default; look for `Ignored build scripts: better-sqlite3...`
+   in the install output. This repo whitelists the needed builds via
+   `pnpm.onlyBuiltDependencies` in `package.json`, but if your `node_modules`
+   was created before that landed, run:
+
+   ```bash
+   pnpm rebuild better-sqlite3 esbuild
+   # or, interactively:
+   pnpm approve-builds
+   ```
+
+2. **Unsupported Node ABI** (e.g. Node 25+). better-sqlite3 only ships prebuilds
+   for Node 20–24. Either switch Node, or rebuild from source (needs Python +
+   a C/C++ toolchain; on Windows that's "Visual Studio Build Tools — Desktop
+   development with C++"):
+
+   ```bash
+   nvm install 22 && nvm use 22
+   # then nuke node_modules and reinstall:
+   #   PowerShell:  Remove-Item -Recurse -Force node_modules
+   #   bash/zsh:    rm -rf node_modules
+   #   Windows CMD: rmdir /s /q node_modules
+   pnpm install
+   ```
 
 ## How it works
 
