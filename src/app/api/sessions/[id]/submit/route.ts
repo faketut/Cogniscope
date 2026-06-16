@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 
 const SubmitSchema = z.object({
   finalAnswer: z.string().optional(),
-  isCorrect: z.boolean().optional(),
+  isCorrect: z.boolean().nullable().optional(),
 });
 
 export async function POST(
