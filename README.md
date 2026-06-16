@@ -99,30 +99,66 @@ which no-op gracefully when the agent isn't present.
 
 ## Architecture
 
+```mermaid
+flowchart LR
+  subgraph Client["Browser · /practice/[id]"]
+    UI[Practice surface]
+    REC[BehaviorRecorder<br/>rrweb + custom emitter]
+    UI --> REC
+  end
+
+  subgraph API["Next.js App Router · API routes"]
+    EV["/api/events"]
+    RR["/api/sessions/:id/rrweb"]
+    SUB["/api/sessions/:id/submit"]
+    AN["/api/analyze"]
+    CHAT["/api/chat"]
+    PNG["/api/sessions/:id/trace.png"]
+  end
+
+  subgraph Storage["Local-only storage"]
+    DB[(SQLite<br/>better-sqlite3)]
+    FS[/data/sessions/&lt;id&gt;.rrweb.jsonl/]
+  end
+
+  subgraph Pipeline["Analyzer pipeline"]
+    FE[extractFeatures]
+    TAG[LLM.completeJSON<br/>behavior tagging]
+    DIAG[LLM.completeJSON<br/>diagnosis]
+    FB[LLM.complete<br/>feedback markdown]
+    FE --> TAG --> DIAG --> FB
+  end
+
+  subgraph LLM["Provider · LLM_PROVIDER"]
+    MOCK[mock]
+    GEM[Gemini]
+    QWEN[Qwen DashScope]
+  end
+
+  subgraph Views["Report surface"]
+    REPORT["/report/:id<br/>Reading · By step · Replay · Tutor"]
+    HIST["/history"]
+    INSP["/inspect/:id"]
+  end
+
+  REC -->|batched POST| EV --> DB
+  REC -->|rrweb chunks| RR --> FS
+  UI -->|Submit & analyze| SUB --> DB
+  SUB --> AN
+  AN --> Pipeline
+  Pipeline --> DB
+  TAG -.-> LLM
+  DIAG -.-> LLM
+  FB -.-> LLM
+
+  DB --> REPORT
+  FS --> REPORT
+  DB --> HIST
+  DB --> INSP
+  REPORT -->|grounded chat| CHAT --> LLM
+  REPORT -->|share| PNG
 ```
-Practice surface ──► BehaviorRecorder (rrweb + custom emitter)
-                  ──► /api/events            ──► SQLite
-                  ──► /api/sessions/:id/rrweb ──► data/sessions/<id>.rrweb.jsonl
 
-Submit ──► /api/sessions/:id/submit
-       ──► /api/analyze ──► extractFeatures()
-                        ──► LLM.completeJSON(behavior tagging)
-                        ──► LLM.completeJSON(diagnosis)
-                        ──► LLM.complete(feedback markdown)
-                        ──► reports table
-
-Report views   ◄── reports + events + rrweb file
-Tutor chat     ──► /api/chat ──► streaming with full report context
-Share trace    ──► /api/sessions/:id/trace.png (server-side SVG via resvg)
-```
-
-## Stack
-
-Next.js 14 (App Router) · TypeScript · Tailwind · better-sqlite3 · rrweb +
-rrweb-player · Monaco · KaTeX · `@resvg/resvg-js` · Gemini SDK · Qwen
-DashScope (OpenAI-compat) · sonner.
-
-Full set of badges is at the [top of this README](#cogniscope).
 
 ## License
 
