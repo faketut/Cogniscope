@@ -1,5 +1,17 @@
 # Cogniscope
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-1f8a48.svg)](LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-14-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-38BDF8?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003B57?logo=sqlite&logoColor=white)](https://github.com/WiseLibs/better-sqlite3)
+[![rrweb](https://img.shields.io/badge/rrweb-screen_recording-7c3aed)](https://www.rrweb.io/)
+[![Monaco](https://img.shields.io/badge/Monaco-editor-1E90FF?logo=visualstudiocode&logoColor=white)](https://microsoft.github.io/monaco-editor/)
+[![KaTeX](https://img.shields.io/badge/KaTeX-math-329F30)](https://katex.org/)
+[![Gemini](https://img.shields.io/badge/Gemini-API-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
+[![Qwen DashScope](https://img.shields.io/badge/Qwen-DashScope-FF6A00)](https://dashscope.aliyun.com/)
+[![pnpm](https://img.shields.io/badge/pnpm-package_manager-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
+
 A learning lab that analyzes your **process**, not just your answers.
 
 ![A 3-minute Quadratic factoring session with a "got stuck here" marker at 0:17](docs/trace-hero.png)
@@ -107,7 +119,14 @@ Share trace    ──► /api/sessions/:id/trace.png (server-side SVG via resvg)
 ## Stack
 
 Next.js 14 (App Router) · TypeScript · Tailwind · better-sqlite3 · rrweb +
-rrweb-player · Monaco · KaTeX · `@resvg/resvg-js` · Gemini SDK · sonner
+rrweb-player · Monaco · KaTeX · `@resvg/resvg-js` · Gemini SDK · Qwen
+DashScope (OpenAI-compat) · sonner.
+
+Full set of badges is at the [top of this README](#cogniscope).
+
+## License
+
+[MIT](LICENSE) © 2026 Jian Feng.
 
 ## Out of scope for v0.1
 
