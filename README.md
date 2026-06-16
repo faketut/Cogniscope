@@ -24,7 +24,12 @@ a Socratic tutor chat.
 
 ## Local setup
 
+Requires **Node.js 20–24** (`.nvmrc` pins 22). `better-sqlite3` ships native
+prebuilds only up to Node 24's ABI; Node 25+ will fail with `Could not locate
+the bindings file` unless you have a C++ toolchain to rebuild from source.
+
 ```bash
+nvm use            # picks up .nvmrc → Node 22
 pnpm install
 cp .env.example .env.local
 # Optionally set GEMINI_API_KEY (or QWEN_API_KEY) and LLM_PROVIDER accordingly
@@ -37,6 +42,22 @@ To populate `/history` with realistic demo data:
 
 ```bash
 pnpm seed
+```
+
+### Troubleshooting
+
+**`Error: Could not locate the bindings file` from `better-sqlite3`.**
+You're on a Node version with no published prebuild (typically Node 25+).
+Pick one:
+
+```bash
+# Recommended — switch to a supported Node, then reinstall:
+nvm install 22 && nvm use 22
+rm -rf node_modules && pnpm install
+
+# Or rebuild from source (needs Python + a C/C++ toolchain;
+# on Windows: Visual Studio Build Tools "Desktop development with C++"):
+pnpm rebuild better-sqlite3
 ```
 
 ## How it works
