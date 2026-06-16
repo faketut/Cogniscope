@@ -39,124 +39,98 @@ To populate `/history` with realistic demo data:
 pnpm seed
 ```
 
-## Demo script
+## How it works
 
-After `pnpm seed`, the current rehearsed sessions are:
+Three workflows, in the order a learner experiences them.
 
-- `seed-7MkRNIuV` — Quadratic factoring
-- `seed-EBlyU3ga` — Chain rule derivative
-- `seed-cISVIj18` — Two Sum
-- `seed-YXiQlW2g` — Integration by parts
+### 1 · Practice — silent capture
 
-Suggested live click path:
+Every keystroke, focus change, hint, and full DOM frame streams out of the
+browser while the timer counts down toward the per-question cap.
 
-1. Open `/history` and point out the four seeded sessions.
-2. Open `/report/seed-7MkRNIuV` to show the reading, by-step timeline, replay, tutor, recommendations, and share-trace actions.
-3. Open `/inspect/seed-7MkRNIuV` to show the raw stored `sessions`, `events`, `reports`, and rrweb file metadata.
-4. Open `/report/seed-cISVIj18` to show the programming flow and discuss that `Run local tests` executes in-browser, while `Submit & analyze` stores the code and behavior trace for analysis.
-5. Hit `/api/sessions/seed-7MkRNIuV/trace.png` if you want a fast proof that export works end-to-end.
+```mermaid
+sequenceDiagram
+  autonumber
+  participant L as Learner
+  participant UI as Practice surface
+  participant REC as BehaviorRecorder<br/>(rrweb + emitter)
+  participant API as Next.js API
+  participant DB as SQLite
+  participant FS as data/sessions/*.rrweb.jsonl
 
-If you re-run `pnpm seed`, these ids will change; use `/history` as the source of truth.
+  L->>UI: open /practice/:id
+  UI->>API: POST /api/sessions (start)
+  API->>DB: insert session row
+  UI->>REC: start(sessionId)
+  loop while solving
+    L->>UI: type / focus / hint
+    REC-->>API: POST /api/events (batched)
+    API->>DB: append event rows
+    REC-->>API: POST /api/sessions/:id/rrweb
+    API->>FS: append rrweb chunk
+  end
+  alt learner submits
+    L->>UI: click Submit & analyze
+  else timer expires
+    UI-->>UI: onTimeUp → auto submit (auto:true)
+  end
+  UI->>API: POST /api/sessions/:id/submit
+```
 
-### Live flow (no seed, ~2 min)
+### 2 · Analyze — three LLM stages, one report row
 
-1. From `/`, open any problem (e.g. `/practice/quadratic-factoring`).
-2. Work the steps. A per-question timer is shown; the cap is `max(estMinutes × 2, 3)` minutes and turns amber in the final 60s.
-3. Either submit, or let the timer expire — on time-up the session auto-submits with `auto: true` in telemetry and a `time_expired` event is recorded.
-4. You'll land on `/analysis/[sessionId]` then `/report/[sessionId]`. Walk through Reading → By step → Replay → Tutor.
-5. Optional: hit `/api/sessions/<id>/trace.png` for the shareable PNG.
-
-## Configuration
-
-| Env | Values | Default | Notes |
-|-----|--------|---------|-------|
-| `LLM_PROVIDER` | `mock`, `gemini`, `qwen` | `mock` | |
-| `GEMINI_API_KEY` | — | — | Required when provider = gemini |
-| `GEMINI_MODEL` | e.g. `gemini-2.5-flash` | `gemini-2.5-flash` | Override at will |
-| `QWEN_API_KEY` | — | — | Required when provider = qwen (DashScope key) |
-| `QWEN_MODEL` | e.g. `qwen-plus` | `qwen-plus` | DashScope model id |
-| `WORKSPACE_ID` | — | — | Only needed when `QWEN_BASE_URL` references it |
-| `QWEN_BASE_URL` | — | DashScope compat URL | Override for a custom OpenAI-compat host. Supports `${WORKSPACE_ID}` expansion (via Next's `dotenv-expand`); replace any `<region>` placeholder before running. |
-
-Without an API key the app falls back to deterministic mock analysis — useful
-for offline development.
-
-Product analytics is handled by **Novus.ai → Pendo**, installed via Novus's
-web UI (which is wired to this GitHub repo). No env var or install snippet
-lives in the codebase; the agent is injected at runtime. The app fires a
-handful of typed custom events via `track()` in [src/lib/pendo.ts](src/lib/pendo.ts)
-which no-op gracefully when the agent isn't present.
-
-## Routes
-
-- `/` — problem catalog with sample trace hero
-- `/practice/[id]` — interactive practice with telemetry + screen recording
-- `/analysis/[sessionId]` — analyzer status
-- `/report/[sessionId]` — Reading / By step / Replay / Tutor tabs + Try-next recommendations + share-trace PNG
-- `/history` — past sessions
-- `/styleguide` — internal design system reference
-- `/api/sessions/[id]/trace.png` — server-rendered PNG of the trace for sharing (`?format=svg` for SVG)
-
-## Architecture
+Submit triggers a deterministic feature pass, then three grounded LLM calls.
+Each call's JSON is validated; on failure the analyzer retries with a longer
+context window, and finally falls back to a mock so the report always lands.
 
 ```mermaid
 flowchart LR
-  subgraph Client["Browser · /practice/[id]"]
-    UI[Practice surface]
-    REC[BehaviorRecorder<br/>rrweb + custom emitter]
-    UI --> REC
+  SUB["/api/sessions/:id/submit"] --> AN["/api/analyze"]
+  AN --> FE[extractFeatures<br/>idle gaps · edits · hints · tab switches]
+  FE --> TAG[completeJSON<br/>behavior tagging]
+  TAG --> DIAG[completeJSON<br/>diagnosis]
+  DIAG --> FB[complete<br/>feedback markdown]
+  FB --> RPT[(reports row)]
+
+  subgraph Provider["LLM_PROVIDER"]
+    direction LR
+    M[mock]
+    G[Gemini]
+    Q[Qwen DashScope]
   end
 
-  subgraph API["Next.js App Router · API routes"]
-    EV["/api/events"]
-    RR["/api/sessions/:id/rrweb"]
-    SUB["/api/sessions/:id/submit"]
-    AN["/api/analyze"]
-    CHAT["/api/chat"]
-    PNG["/api/sessions/:id/trace.png"]
-  end
+  TAG -. uses .-> Provider
+  DIAG -. uses .-> Provider
+  FB -. uses .-> Provider
 
-  subgraph Storage["Local-only storage"]
-    DB[(SQLite<br/>better-sqlite3)]
-    FS[/data/sessions/&lt;id&gt;.rrweb.jsonl/]
-  end
+  classDef llm fill:#eef,stroke:#669,color:#223;
+  class TAG,DIAG,FB llm;
+```
 
-  subgraph Pipeline["Analyzer pipeline"]
-    FE[extractFeatures]
-    TAG[LLM.completeJSON<br/>behavior tagging]
-    DIAG[LLM.completeJSON<br/>diagnosis]
-    FB[LLM.complete<br/>feedback markdown]
-    FE --> TAG --> DIAG --> FB
-  end
+### 3 · Report — read, replay, ask
 
-  subgraph LLM["Provider · LLM_PROVIDER"]
-    MOCK[mock]
-    GEM[Gemini]
-    QWEN[Qwen DashScope]
-  end
+The report surface stitches the SQLite report row, the raw events, and the
+rrweb file into four tabs. The Tutor tab streams a Socratic chat grounded in
+*this* session's report, never a generic textbook.
 
-  subgraph Views["Report surface"]
-    REPORT["/report/:id<br/>Reading · By step · Replay · Tutor"]
-    HIST["/history"]
-    INSP["/inspect/:id"]
-  end
+```mermaid
+flowchart LR
+  DB[(SQLite<br/>sessions · events · reports)]
+  FS[/rrweb file/]
 
-  REC -->|batched POST| EV --> DB
-  REC -->|rrweb chunks| RR --> FS
-  UI -->|Submit & analyze| SUB --> DB
-  SUB --> AN
-  AN --> Pipeline
-  Pipeline --> DB
-  TAG -.-> LLM
-  DIAG -.-> LLM
-  FB -.-> LLM
+  DB --> R["/report/:id"]
+  FS --> R
+  DB --> H["/history"]
+  DB --> I["/inspect/:id"]
 
-  DB --> REPORT
-  FS --> REPORT
-  DB --> HIST
-  DB --> INSP
-  REPORT -->|grounded chat| CHAT --> LLM
-  REPORT -->|share| PNG
+  R --> T1[Reading]
+  R --> T2[By step]
+  R --> T3[Replay<br/>rrweb-player]
+  R --> T4[Tutor]
+
+  T4 -->|stream| CHAT["/api/chat"]
+  CHAT -->|grounded in report| LLM[(LLM provider)]
+  R -->|share| PNG["/api/sessions/:id/trace.png<br/>resvg → PNG"]
 ```
 
 
