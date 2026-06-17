@@ -76,11 +76,13 @@ export function BehaviorRecorderProvider({
     const events = rrwebBufferRef.current;
     rrwebBufferRef.current = [];
     try {
+      // No `keepalive` — rrweb snapshots routinely exceed the 64 KiB
+      // keepalive cap and would be rejected as TypeError by the browser,
+      // leaving the buffer to grow unbounded across retries.
       await fetch(`/api/sessions/${sid}/rrweb`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ events }),
-        keepalive: true,
       });
     } catch {
       // re-buffer on failure
