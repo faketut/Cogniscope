@@ -3,26 +3,31 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Loads the rrweb recording for this session and renders it in rrweb-player.
- * If no recording exists (older sessions, or rrweb failed to load on capture),
- * we show a friendly empty state instead of an error.
+ * Loads the rrweb recording for this session and renders it using rrweb's
+ * Replayer directly (rrweb-player@2.0.1's ESM build is broken — its bundled
+ * Svelte Player declares `replayer` as a prop but never instantiates one, so
+ * the iframe never mounts; see rrweb-io/rrweb#1602). We render a minimal
+ * play / pause / scrub bar around the Replayer ourselves.
  */
 export function ReplayTab({ sessionId }: { sessionId: string }) {
-  // Two refs: one for the wrapper (whose width we trust), one for the host
-  // node we hand to rrweb-player. Keeping them separate means the player's
-  // own markup can't pollute the measurement.
   const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const hostRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const replayerRef = useRef<any>(null);
+  const rafRef = useRef<number | null>(null);
   const [status, setStatus] = useState<"loading" | "empty" | "ready" | "error">(
     "loading"
   );
   const [eventCount, setEventCount] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [currentMs, setCurrentMs] = useState(0);
+  const [totalMs, setTotalMs] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    let player: { $destroy?: () => void; triggerResize?: () => void } | null =
-      null;
     let ro: ResizeObserver | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let replayer: any = null;
 
     (async () => {
       try {
@@ -36,49 +41,69 @@ export function ReplayTab({ sessionId }: { sessionId: string }) {
         }
         setEventCount(data.events.length);
 
-        // Dynamic import — rrweb-player ships its own CSS we need to load too.
-        const [playerModule] = await Promise.all([
-          import("rrweb-player"),
-          // Side-effect: stylesheet
-          import("rrweb-player/dist/style.css"),
+        // rrweb ships its own iframe CSS; load it as a side-effect import.
+        const [rrweb] = await Promise.all([
+          import("rrweb"),
+          import("rrweb/dist/style.css"),
         ]);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const RrwebPlayer: any = (playerModule as any).default ?? playerModule;
-        if (cancelled || !hostRef.current || !wrapperRef.current) return;
+        if (cancelled || !stageRef.current || !wrapperRef.current) return;
 
-        // Clear any previous player instance (e.g. tab re-mount)
-        hostRef.current.innerHTML = "";
+        // Clear any previous instance (tab re-mount / strict-mode double-call).
+        stageRef.current.innerHTML = "";
 
-        // Floor to avoid sub-pixel overflow; cap at 960 so the player doesn't
-        // stretch into an awkward letterbox on very wide screens.
-        const measure = () =>
-          Math.max(
-            280,
-            Math.min(960, Math.floor(wrapperRef.current?.clientWidth ?? 720))
-          );
-        const width = measure();
-        const height = Math.round(width * 0.6);
-        player = new RrwebPlayer({
-          target: hostRef.current,
-          props: {
-            events: data.events,
-            width,
-            height,
-            autoPlay: false,
-            showController: true,
-          },
+        replayer = new rrweb.Replayer(
+          data.events as Parameters<typeof rrweb.Replayer>[0],
+          {
+            root: stageRef.current,
+            speed: 1,
+            skipInactive: true,
+            showWarning: false,
+          }
+        );
+        replayerRef.current = replayer;
+
+        const meta = replayer.getMetaData();
+        setTotalMs(meta.totalTime);
+        setCurrentMs(0);
+
+        replayer.on("finish", () => {
+          setPlaying(false);
+          if (rafRef.current !== null) {
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = null;
+          }
         });
-        setStatus("ready");
 
-        // Keep the player sized to its container on window / layout changes.
+        // Fit the recorded viewport into our column using a CSS scale.
+        const fit = () => {
+          if (!wrapperRef.current || !stageRef.current) return;
+          const wrapperW = wrapperRef.current.clientWidth;
+          const rrwebWrapper = stageRef.current.querySelector<HTMLElement>(
+            ".replayer-wrapper"
+          );
+          const iframe = stageRef.current.querySelector<HTMLIFrameElement>(
+            ".replayer-wrapper iframe"
+          );
+          if (!rrwebWrapper || !iframe) return;
+          const iw = iframe.offsetWidth || 1024;
+          const ih = iframe.offsetHeight || 576;
+          // Leave a hair of breathing room so we never hit the edge.
+          const padded = Math.max(280, wrapperW - 4);
+          const scale = Math.min(1, padded / iw);
+          rrwebWrapper.style.transformOrigin = "top left";
+          rrwebWrapper.style.transform = `scale(${scale})`;
+          // Reserve space for the scaled iframe so the controls sit below it.
+          stageRef.current.style.height = `${Math.round(ih * scale)}px`;
+          stageRef.current.style.width = `${Math.round(iw * scale)}px`;
+        };
+        // Wait a tick so the iframe is in the DOM before we measure it.
+        requestAnimationFrame(() => {
+          fit();
+          setStatus("ready");
+        });
+
         if (typeof ResizeObserver !== "undefined") {
-          ro = new ResizeObserver(() => {
-            try {
-              player?.triggerResize?.();
-            } catch {
-              // rrweb-player versions without triggerResize — just no-op.
-            }
-          });
+          ro = new ResizeObserver(() => fit());
           ro.observe(wrapperRef.current);
         }
       } catch {
@@ -88,18 +113,65 @@ export function ReplayTab({ sessionId }: { sessionId: string }) {
 
     return () => {
       cancelled = true;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       try {
         ro?.disconnect();
       } catch {
         // ignore
       }
       try {
-        player?.$destroy?.();
+        replayer?.pause?.();
+        replayer?.destroy?.();
       } catch {
         // ignore
       }
+      replayerRef.current = null;
     };
   }, [sessionId]);
+
+  const togglePlay = () => {
+    const r = replayerRef.current;
+    if (!r) return;
+    if (playing) {
+      r.pause();
+      setPlaying(false);
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    } else {
+      // If we ran off the end, restart from 0; otherwise resume.
+      const resumeAt = currentMs >= totalMs - 50 ? 0 : currentMs;
+      r.play(resumeAt);
+      setPlaying(true);
+      const tick = () => {
+        const cur = replayerRef.current;
+        if (!cur) return;
+        try {
+          setCurrentMs(cur.getCurrentTime());
+        } catch {
+          // ignore
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    }
+  };
+
+  const onScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const r = replayerRef.current;
+    if (!r) return;
+    const ms = Number(e.target.value);
+    setCurrentMs(ms);
+    if (playing) {
+      r.play(ms);
+    } else {
+      r.pause(ms);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -125,20 +197,48 @@ export function ReplayTab({ sessionId }: { sessionId: string }) {
         </p>
       )}
 
-      {/*
-        Hard width constraint — `overflow-hidden` keeps the player's chrome
-        from pushing siblings or the page itself wider than the viewport, and
-        `max-w-full` plus the parent's grid column ensures the wrapper itself
-        never exceeds its column. `min-w-0` defeats the flex/grid default
-        intrinsic-min-content behavior that lets children blow out a column.
-      */}
       <div
         ref={wrapperRef}
-        className="min-w-0 max-w-full overflow-hidden rounded-sm border border-rule bg-vellum p-2"
+        className="min-w-0 max-w-full overflow-hidden rounded-sm border border-rule bg-vellum"
       >
-        <div ref={hostRef} className="mx-auto" />
+        <div className="flex items-center justify-center bg-white p-2">
+          <div ref={stageRef} className="relative mx-auto overflow-hidden" />
+        </div>
+
+        {status === "ready" && (
+          <div className="flex items-center gap-3 border-t border-rule px-3 py-2">
+            <button
+              type="button"
+              onClick={togglePlay}
+              className="rounded-sm border border-ink px-3 py-1 font-mono text-xs uppercase tracking-wider text-ink transition hover:bg-ink hover:text-vellum"
+            >
+              {playing ? "Pause" : "Play"}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={totalMs}
+              step={50}
+              value={Math.min(currentMs, totalMs)}
+              onChange={onScrub}
+              className="flex-1 accent-ink"
+              aria-label="Scrub"
+            />
+            <span className="font-mono text-xs tabular-nums text-graphite">
+              {formatMs(currentMs)} / {formatMs(totalMs)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+function formatMs(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 
