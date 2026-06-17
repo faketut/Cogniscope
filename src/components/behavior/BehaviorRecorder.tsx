@@ -39,6 +39,8 @@ export function BehaviorRecorderProvider({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const bufferRef = useRef<BehaviorEvent[]>([]);
+  const rrwebBufferRef = useRef<unknown[]>([]);
+  const rrwebStopRef = useRef<(() => void) | null>(null);
   const sidRef = useRef<string | null>(null);
   const lastInputRef = useRef<number>(Date.now());
   const idleTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,12 +70,13 @@ export function BehaviorRecorderProvider({
     };
   }, [problemId]);
 
-  const flush = useCallback(async () => {
-    if (!sidRef.current || bufferRef.current.length === 0) return;
-    const events = bufferRef.current;
-    bufferRef.current = [];
+  const flushRrweb = useCallback(async () => {
+    const sid = sidRef.current;
+    if (!sid || rrwebBufferRef.current.length === 0) return;
+    const events = rrwebBufferRef.current;
+    rrwebBufferRef.current = [];
     try {
-      await fetch(`/api/events?sessionId=${sidRef.current}`, {
+      await fetch(`/api/sessions/${sid}/rrweb`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ events }),
@@ -81,9 +84,31 @@ export function BehaviorRecorderProvider({
       });
     } catch {
       // re-buffer on failure
-      bufferRef.current.unshift(...events);
+      rrwebBufferRef.current.unshift(...events);
     }
   }, []);
+
+  const flush = useCallback(async () => {
+    // Drain rrweb in parallel with structured events so a submit handler
+    // that awaits flush() before router.push() captures the recording too.
+    const rrwebP = flushRrweb();
+    if (sidRef.current && bufferRef.current.length > 0) {
+      const events = bufferRef.current;
+      bufferRef.current = [];
+      try {
+        await fetch(`/api/events?sessionId=${sidRef.current}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ events }),
+          keepalive: true,
+        });
+      } catch {
+        // re-buffer on failure
+        bufferRef.current.unshift(...events);
+      }
+    }
+    await rrwebP;
+  }, [flushRrweb]);
 
   const emit = useCallback(
     (type: string, payload?: Record<string, unknown>, stepId?: string) => {
@@ -152,9 +177,6 @@ export function BehaviorRecorderProvider({
   // Dynamically imported so it doesn't bloat the initial bundle, and
   // gracefully no-ops if rrweb fails to load.
   // ─────────────────────────────────────────────────────────────────────
-  const rrwebBufferRef = useRef<unknown[]>([]);
-  const rrwebStopRef = useRef<(() => void) | null>(null);
-
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
@@ -184,24 +206,6 @@ export function BehaviorRecorderProvider({
       }
     };
   }, [sessionId]);
-
-  const flushRrweb = useCallback(async () => {
-    const sid = sidRef.current;
-    if (!sid || rrwebBufferRef.current.length === 0) return;
-    const events = rrwebBufferRef.current;
-    rrwebBufferRef.current = [];
-    try {
-      await fetch(`/api/sessions/${sid}/rrweb`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ events }),
-        keepalive: true,
-      });
-    } catch {
-      // re-buffer on failure
-      rrwebBufferRef.current.unshift(...events);
-    }
-  }, []);
 
   // Periodic rrweb flush, slower cadence than behavior events.
   useEffect(() => {
