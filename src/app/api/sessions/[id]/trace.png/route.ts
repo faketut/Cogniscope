@@ -3,9 +3,10 @@ import { Resvg } from "@resvg/resvg-js";
 import { getDb, type EventRow } from "@/lib/db";
 import { getProblem } from "@/content/problems";
 import { eventsToTraceEvents, pickAnnotations } from "@/lib/trace";
-import { renderTraceSVG } from "@/lib/traceRenderer";
+import { renderTraceSVG, type TraceOutcome } from "@/lib/traceRenderer";
 import type { StoredEvent } from "@/lib/features";
 import type { BehaviorTags } from "@/lib/prompts/behaviorTagging";
+import type { Diagnosis } from "@/lib/prompts/diagnosis";
 
 /**
  * GET /api/sessions/[id]/trace.png?format=svg|png   (default png)
@@ -21,7 +22,7 @@ export async function GET(
   const db = getDb();
   const session = db
     .prepare(
-      "SELECT id, problem_id, started_at, submitted_at FROM sessions WHERE id = ?"
+      "SELECT id, problem_id, started_at, submitted_at, is_correct FROM sessions WHERE id = ?"
     )
     .get(params.id) as
     | {
@@ -29,6 +30,7 @@ export async function GET(
         problem_id: string;
         started_at: number;
         submitted_at: number | null;
+        is_correct: number | null;
       }
     | undefined;
   if (!session) {
@@ -56,12 +58,18 @@ export async function GET(
     (session.submitted_at ?? Date.now()) - session.started_at
   );
 
-  // Try to pull AI annotations from the report (if analyzed). If not analyzed
-  // yet, fall back to empty annotations — the trace itself still renders.
+  // Try to pull AI annotations + a one-line takeaway from the report (if
+  // analyzed). If not analyzed yet, fall back gracefully — the trace itself
+  // still renders.
   let annotations = [] as ReturnType<typeof pickAnnotations>;
+  let takeaway: string | undefined;
   const reportRow = db
-    .prepare("SELECT tags_json FROM reports WHERE session_id = ?")
-    .get(params.id) as { tags_json: string } | undefined;
+    .prepare(
+      "SELECT tags_json, diagnosis_json FROM reports WHERE session_id = ?"
+    )
+    .get(params.id) as
+    | { tags_json: string; diagnosis_json: string }
+    | undefined;
   if (reportRow) {
     try {
       const tags: BehaviorTags = JSON.parse(reportRow.tags_json);
@@ -69,7 +77,21 @@ export async function GET(
     } catch {
       // ignore — render without annotations
     }
+    try {
+      const dx: Diagnosis = JSON.parse(reportRow.diagnosis_json);
+      // First root cause's description = the most representative takeaway.
+      takeaway = dx.rootCauses?.[0]?.description;
+    } catch {
+      // ignore — render without takeaway
+    }
   }
+
+  // Map session.is_correct + submitted_at into the visual outcome chip.
+  let outcome: TraceOutcome;
+  if (session.is_correct === 1) outcome = "correct";
+  else if (session.is_correct === 0) outcome = "incorrect";
+  else if (session.submitted_at !== null) outcome = "submitted";
+  else outcome = "in-progress";
 
   const svg = renderTraceSVG({
     durationMs,
@@ -77,6 +99,8 @@ export async function GET(
     annotations,
     title: problem.title,
     subtitle: `${problem.subject} · ${problem.topic}`,
+    outcome,
+    takeaway,
   });
 
   const format = (req.nextUrl.searchParams.get("format") || "png").toLowerCase();
