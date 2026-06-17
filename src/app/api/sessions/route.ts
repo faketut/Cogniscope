@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { nanoid } from "nanoid";
-import { getDb } from "@/lib/db";
+import { getDb, deleteAllSessions } from "@/lib/db";
 import { getProblem } from "@/content/problems";
 
 const CreateSessionSchema = z.object({
@@ -40,4 +40,16 @@ export async function GET() {
     )
     .all();
   return NextResponse.json({ sessions: rows });
+}
+
+/**
+ * DELETE /api/sessions
+ *
+ * Clear-all: removes every session row (cascades events / reports / chat)
+ * and every rrweb recording. Returns the count that was deleted so the UI
+ * can report "Cleared N sessions" without re-querying.
+ */
+export async function DELETE() {
+  const deleted = deleteAllSessions();
+  return NextResponse.json({ deleted });
 }

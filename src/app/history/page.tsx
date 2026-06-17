@@ -4,6 +4,10 @@ import { getDb } from "@/lib/db";
 import { getProblem } from "@/content/problems";
 import { Badge } from "@/components/ui/Badge";
 import { formatDuration, formatRelativeTime } from "@/lib/utils";
+import {
+  DeleteSessionButton,
+  ClearAllSessionsButton,
+} from "@/components/history/SessionDeleteActions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +35,15 @@ export default function HistoryPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 pb-24 pt-10 sm:pt-14">
-      <header className="flex items-end justify-between border-b border-ink pb-3">
+      <header className="flex flex-col gap-3 border-b border-ink pb-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="eyebrow">your sessions</p>
           <h1 className="mt-1 font-display text-3xl sm:text-[2.5rem]">History</h1>
         </div>
-        <p className="eyebrow tabular-nums">{rows.length} of last 50</p>
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <p className="eyebrow tabular-nums">{rows.length} of last 50</p>
+          <ClearAllSessionsButton count={rows.length} />
+        </div>
       </header>
 
       {rows.length === 0 ? (
@@ -100,7 +107,7 @@ export default function HistoryPage() {
                     />
                   </span>
                 </Link>
-                <div className="-mt-3 pb-4 text-right">
+                <div className="-mt-3 flex items-center justify-end gap-2 pb-4">
                   <Link
                     href={`/inspect/${r.id}`}
                     className="inline-flex items-center border border-rule px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-chalk transition-colors hover:border-ink hover:text-ink"
@@ -108,6 +115,10 @@ export default function HistoryPage() {
                   >
                     Inspect raw
                   </Link>
+                  <DeleteSessionButton
+                    sessionId={r.id}
+                    title={p?.title ?? r.problem_id}
+                  />
                 </div>
               </li>
             );

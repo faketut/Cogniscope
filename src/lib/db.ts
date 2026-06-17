@@ -180,3 +180,31 @@ export function deleteSession(sessionId: string): number {
   }
   return res.changes as number;
 }
+
+/**
+ * Wipes every session row (cascading events / reports / chat) and removes
+ * every `*.rrweb.jsonl` artifact under `data/sessions/`. Returns the number
+ * of session rows that were deleted.
+ *
+ * Intended for the user-facing "Clear all" cleanup action. Files on disk are
+ * removed individually (rather than rm -rf'ing the directory) so a stray
+ * non-session file the user dropped in there isn't blown away.
+ */
+export function deleteAllSessions(): number {
+  const db = getDb();
+  const res = db.prepare("DELETE FROM sessions").run();
+  try {
+    for (const entry of fs.readdirSync(SESSIONS_DIR)) {
+      if (entry.endsWith(".rrweb.jsonl")) {
+        try {
+          fs.unlinkSync(path.join(SESSIONS_DIR, entry));
+        } catch {
+          // ignore per-file errors — best-effort cleanup.
+        }
+      }
+    }
+  } catch {
+    // directory may not exist on a fresh checkout — fine.
+  }
+  return res.changes as number;
+}
