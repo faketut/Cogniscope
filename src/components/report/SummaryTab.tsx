@@ -50,7 +50,7 @@ export function SummaryTab({
           THE TRACE — spine of the report
           ────────────────────────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-baseline justify-between">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
           <p className="eyebrow">your session, end to end</p>
           <p className="eyebrow tabular-nums">
             {formatDuration(features.durationMs)} ·{" "}
